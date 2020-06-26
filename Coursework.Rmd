@@ -1,0 +1,197 @@
+WEEK 2 REPRODUCIBLE RESEARCH COURSEWORK
+====================================================
+---
+title: "Reproducible Research"
+author: "C Barclay"
+date: "23/06/2020"
+output: html_document: default
+        pdf_document: default
+---
+Lets start by loading the packages
+
+```{r}
+# Load  packages
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(ggplot2)
+```
+It is now possible to collect a large amount of data about personal movement using activity monitoring devices such as a Fitbit, Nike Fuelband, or Jawbone Up. 
+
+These type of devices are part of the “quantified self” movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. But these data remain under-utilized both because the raw data are hard to obtain and there is a lack of statistical methods and software for processing and interpreting the data.
+
+This coursework makes use of data from a personal activity monitoring device. 
+
+This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+STEP 1. Here we are going to load some data.
+```{r}
+## START PROGRAM ##
+# Coursera emissions zip file web location
+fileUrl <-
+  "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+
+# set and check working directory
+wd <- setwd("C:/Downloads/Datasets")
+
+# Download datasets from Coursera webpage and unzip it
+
+# Change destfile to user specified location!!
+
+download.file(fileUrl, destfile = "C:/Downloads/Datasets/activity.zip",
+              method = "curl")
+
+filesUnzip <-
+  unzip(
+    "activity.zip",
+    files = NULL,
+    list = TRUE,
+    overwrite = TRUE,
+    junkpaths = FALSE,
+    exdir = wd,
+    unzip = "internal",
+    setTimes = FALSE
+  )
+```
+
+As the working directory will be reset when a chunk is finished running we need to specify the working directory using knitr.
+
+```{r setup}
+knitr::opts_knit$set(root.dir = 'C:/Downloads/Datasets')
+```
+
+Read data into Workspace
+
+```{r}
+# The working directory will be reset when a chunk is finished running so we need to respecify the working directory.
+activity <- read.csv(filesUnzip$Name[1])
+
+str(activity)
+
+head(activity,5)
+tail(activity,5)
+
+summary(activity)
+```
+
+STEP 2. Plot a histogram of the number of steps per day
+
+First, we will remove missing values. So we create a second version of the data without missing values.
+
+```{r}
+# Variables without NA values
+activity_omit <- na.omit(activity)
+
+# The number of rows with NA values in.
+na_diff <- nrow(activity)-nrow(activity_omit)
+print(paste("The total number of rows with NA is: ",na_diff))
+
+# Group the number of steps by day and find total sum of steps per day.
+act_Days <- summarise(group_by(activity_omit,date),steps = sum(steps))
+
+# Simple summary of mean & median of steps per day
+summary(act_Days$steps)
+
+# Create histogram using ggplot2
+q <- ggplot(act_Days, aes(steps)) + geom_histogram(aes(fill=..count..)) + scale_fill_gradient("Count",low="blue", high="orange") + labs(title="Histogram for Steps")
+q
+```
+
+STEP 3. Plot a Time-Series graph of the Average Number of Steps per Day
+
+Make a time series plot (i.e. type = “l”) of the 5-minute interval column in activty.csv (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+
+```{r}
+# We create the variable act_Interval in which steps are aggregated into averages within each 5 minute interval:
+
+act_Interval <- summarize(group_by(activity_omit, interval), steps=mean(steps))
+
+ggplot(act_Interval, aes(interval, steps)) + geom_line(colour ="purple")
+
+```
+
+Which 5-minute Interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r}
+# Return the row in variable act_Interval for column steps, where steps is at maximum.
+act_Interval[act_Interval$steps==max(act_Interval$steps),]
+
+# or structure it nicely.
+
+print(paste("Interval containing the most steps on average: ",act_Interval$interval[which.max(act_Interval$steps)]))
+
+print(paste("Average steps for that interval: ",round(max(act_Interval$steps),digits=2)))
+
+```
+
+STEP 4. Impute Missing Values
+
+There are a number of days/intervals where there are missing values (coded as \color{red}{\verb|NA|}NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
+
+We need to create a new dataset that is equal to the original dataset but with the missing data filled in.
+
+We will use the apply method to compute the mean of the column with NA. Let's see an example
+
+Step 1) Earlier in the tutorial, we stored the columns name with the missing values in the list called activity_omit. We will use this list
+
+Step 2) Now we need to compute of the mean with the argument na.rm = TRUE. This argument is compulsory because the columns have missing data, and this tells R to ignore them.
+
+```{r}
+# Some days have no data, so it is not feasible to replace missing values with the day’s mean. Instead, replace missing values with the mean number of steps for each interval across all of the days. The act_Interval data frame contains these means. I start by merging the act_Interval data with the raw activity data.
+
+# rename steps column.
+names(act_Interval)[2] <- "mean.steps"
+
+# Merge variables by column
+act_Impute <- merge(activity, act_Interval)
+
+# For each row in act_Impute$steps with NA values, replace with values in act_Imputet$mean.steps column.
+act_Impute$steps[is.na(act_Impute$steps)] <- act_Impute$mean.steps[is.na(act_Impute$steps)]
+
+```
+
+STEP 5. Build a Histogram of the Total Number of Steps per Day
+
+Additionally, calculate and report the mean and median total number of steps taken per day.
+
+```{r}
+# As before, group the number of steps by day and find total sum of steps per day.
+act_Days_Imp <- summarize(group_by(act_Impute, date), steps=sum(steps))
+
+# Simple summary of mean & median of steps per day
+summary(act_Days_Imp$steps)
+
+# Create histogram using ggplot2
+p <- ggplot(act_Days_Imp, aes(steps)) + geom_histogram(aes(fill=..count..)) + scale_fill_gradient("Count",low="blue", high="orange") + labs(title="Histogram for Steps with Imputed Data")
+p
+
+```
+
+The mean appears to be unaffected by this simple data imputation. The median is smaller.
+
+STEP 6. Show any Differences in Activity Patterns Between Weekdays and Weekends?
+
+Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
+
+```{r}
+# Create daysofweek column.
+act_Impute$dayofweek <- weekdays(as.Date(act_Impute$date))
+# Create weekend column and populate with logical vectors if $dayofweek = saturday or sunday.
+act_Impute$weekend <-as.factor(act_Impute$dayofweek=="Saturday"|act_Impute$dayofweek=="Sunday")
+
+levels(act_Impute$weekend) <- c("Weekday", "Weekend")
+
+# Build variables for Histogram
+act_Weekday <- act_Impute[act_Impute$weekend=="Weekday",]
+act_Weekend <- act_Impute[act_Impute$weekend=="Weekend",]
+
+act_Weekday_Interval <- summarize(group_by(act_Weekday, interval), steps=mean(steps))
+act_Weekday_Interval$dow <- "Weekday"
+
+act_Weekend_Interval <- summarize(group_by(act_Weekend, interval), steps=mean(steps))
+act_Weekend_Interval$dow <- "Weekend"
+
+# Append the variables together.
+act_Int <- rbind(act_Weekday_Interval, act_Weekend_Interval)
+act_Int$dow <- as.factor(act_Int$dow)
+ggplot(act_Int, aes(interval, steps)) + geom_line() + facet_grid(dow ~ .)
+```
